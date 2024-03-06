@@ -7,6 +7,8 @@ import lombok.*;
 import me.earth.headlessmc.api.config.Config;
 import me.earth.headlessmc.launcher.LauncherProperties;
 
+import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.Map;
@@ -27,6 +29,7 @@ public class AccountManager implements Iterable<Account> {
 
     public Account login(Config config) throws AuthException {
         log.debug("Attempting to login...");
+
         var acc = accountStore.load();
         if (acc.isPresent() && (acc = refresh(acc.get())).isPresent()) {
             log.debug("Found account " + acc + " in account store.");
@@ -42,16 +45,19 @@ public class AccountManager implements Iterable<Account> {
             return this.login(email, password);
         }
 
-        if (offlineChecker.isOffline()) {
-            return new Account("Offline", OFFLINE_UUID, "", "", "", "");
-        }
-
         log.warning("No valid account found!");
         throw new AuthException("You can't play the game without an account!" +
                                     " Please use the login command.");
     }
 
     public Account login(String email, String password) throws AuthException {
+        if (!email.contains("@")) {
+            String offlineUuid = UUID.nameUUIDFromBytes(("OfflinePlayer:" + email).getBytes(StandardCharsets.UTF_8)).toString();
+            Account offlineAccount = new Account(email, offlineUuid, "", "", "", "");
+            save(offlineAccount);
+            return offlineAccount;
+        }
+
         val hash = (email + password).hashCode();
         val cachedAccount = cache.get(hash);
         if (cachedAccount != null) {
@@ -107,6 +113,11 @@ public class AccountManager implements Iterable<Account> {
 
     private Optional<Account> refresh(Account account) {
         log.debug("Refreshing account " + account);
+
+        if (!account.getName().contains("@")) {
+          return Optional.of(account);
+        }
+
         val authenticator = new MicrosoftAuthenticator();
         try {
             val result = authenticator.loginWithRefreshToken(

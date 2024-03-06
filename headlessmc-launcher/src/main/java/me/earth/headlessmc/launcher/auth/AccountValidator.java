@@ -33,6 +33,11 @@ public class AccountValidator {
 
     public void validate(Account account) throws AuthException {
         log.debug("Validating account " + account);
+
+        if (!account.getName().contains("@")) {
+          return;
+        }
+
         try {
             val con = (HttpURLConnection) URL.openConnection();
             con.setRequestMethod("GET");
